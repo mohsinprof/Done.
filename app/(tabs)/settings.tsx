@@ -11,6 +11,7 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
+import * as Updates from 'expo-updates';
 import { useTask } from '@/app-src/context/TaskContext';
 import { Colors } from '@/app-example/constants/theme';
 import { useColorScheme } from '@/app-example/hooks/use-color-scheme';
@@ -24,6 +25,43 @@ export default function SettingsScreen() {
   const colors = Colors[state.themeMode === 'system' ? (colorScheme ?? 'light') : state.themeMode];
 
   const [isExporting, setIsExporting] = useState(false);
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+
+  const handleCheckForUpdates = async () => {
+    if (__DEV__) {
+      Alert.alert('Development Mode', 'Manual updates are not available in development.');
+      return;
+    }
+
+    try {
+      setIsCheckingUpdates(true);
+      const update = await Updates.checkForUpdateAsync();
+
+      if (update.isAvailable) {
+        Alert.alert(
+          'Update Available',
+          'A new version is available. Would you like to update now?',
+          [
+            { text: 'Later', style: 'cancel', onPress: () => setIsCheckingUpdates(false) },
+            {
+              text: 'Update & Restart',
+              onPress: async () => {
+                await Updates.fetchUpdateAsync();
+                await Updates.reloadAsync();
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert('No Updates', 'You are already on the latest version.');
+      }
+    } catch (error) {
+      console.error('Update check failed:', error);
+      Alert.alert('Error', 'Could not check for updates. Please try again later.');
+    } finally {
+      setIsCheckingUpdates(false);
+    }
+  };
 
   const handleClearData = () => {
     Alert.alert(
@@ -147,6 +185,31 @@ export default function SettingsScreen() {
           handleClearData,
           true
         )}
+
+        {/* Update Section */}
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          App Updates
+        </Text>
+
+        <TouchableOpacity
+          onPress={handleCheckForUpdates}
+          disabled={isCheckingUpdates}
+          style={[
+            styles.settingRow,
+            { backgroundColor: colors.background, borderColor: colors.tabIconDefault },
+          ]}>
+          <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View>
+              <Text style={[styles.settingTitle, { color: colors.text }]}>
+                Check for Updates
+              </Text>
+              <Text style={[styles.settingSubtitle, { color: colors.tabIconDefault }]}>
+                Manually check for new versions
+              </Text>
+            </View>
+            {isCheckingUpdates && <ActivityIndicator size="small" color={colors.tint} />}
+          </View>
+        </TouchableOpacity>
 
         {/* About Section */}
         <Text style={[styles.sectionTitle, { color: colors.text }]}>About</Text>

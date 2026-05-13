@@ -43,6 +43,9 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
+    "updates": {
+      "checkAutomatically": "ON_ERROR_RECOVERY"
+    },
     "extra": {
       "router": {},
       "eas": {
