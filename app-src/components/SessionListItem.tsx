@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Session } from '@/app-src/types';
-import { Colors } from '@/app-example/constants/theme';
-import { useColorScheme } from '@/app-example/hooks/use-color-scheme';
+import { Colors } from '@/../app-example/constants/theme';
+import { useColorScheme } from '@/../app-example/hooks/use-color-scheme';
 import { formatDateTime, formatTime, formatMinutes } from '@/app-src/utils/helpers';
 
 interface SessionListItemProps {

@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import * as Updates from 'expo-updates';
 import { useTask } from '@/app-src/context/TaskContext';
-import { Colors } from '@/app-example/constants/theme';
-import { useColorScheme } from '@/app-example/hooks/use-color-scheme';
+import { Colors } from '@/../app-example/constants/theme';
+import { useColorScheme } from '@/../app-example/hooks/use-color-scheme';
 
 /**
  * Settings Screen - app configuration and data management

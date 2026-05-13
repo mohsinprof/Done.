@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTask } from '@/app-src/context/TaskContext';
-import { Colors } from '@/app-example/constants/theme';
-import { useColorScheme } from '@/app-example/hooks/use-color-scheme';
+import { Colors } from '@/../app-example/constants/theme';
+import { useColorScheme } from '@/../app-example/hooks/use-color-scheme';
 import { ProgressBar } from '@/app-src/components/ProgressBar';
 import { SessionListItem } from '@/app-src/components/SessionListItem';
 import { getTaskById, getTodayDate } from '@/app-src/utils/carryOverLogic';

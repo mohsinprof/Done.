@@ -14,8 +14,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTask } from '@/app-src/context/TaskContext';
-import { Colors } from '@/app-example/constants/theme';
-import { useColorScheme } from '@/app-example/hooks/use-color-scheme';
+import { Colors } from '@/../app-example/constants/theme';
+import { useColorScheme } from '@/../app-example/hooks/use-color-scheme';
 import { TaskCard } from '@/app-src/components/TaskCard';
 import { ProgressBar } from '@/app-src/components/ProgressBar';
 import { getAllTasksFlat, getTodayDate } from '@/app-src/utils/carryOverLogic';
