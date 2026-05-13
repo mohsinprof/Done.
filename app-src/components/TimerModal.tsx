@@ -10,8 +10,8 @@ import {
   Alert,
 } from 'react-native';
 import { useTask } from '@/app-src/context/TaskContext';
-import { Colors } from '@/../app-example/constants/theme';
-import { useColorScheme } from '@/../app-example/hooks/use-color-scheme';
+import { Colors } from '@/app-example/constants/theme';
+import { useColorScheme } from '@/app-example/hooks/use-color-scheme';
 import { getAllTasksFlat } from '@/app-src/utils/carryOverLogic';
 import { Task } from '@/app-src/types';
 import { formatMinutes } from '@/app-src/utils/helpers';
