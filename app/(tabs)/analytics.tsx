@@ -8,10 +8,10 @@ import {
   Dimensions,
   FlatList,
 } from 'react-native';
-import { useTask } from '@/app-src/context/TaskContext';
-import { Colors } from '@/app-example/constants/theme';
-import { useColorScheme } from '@/app-example/hooks/use-color-scheme';
-import { getAllTasksFlat, getTodayDate } from '@/app-src/utils/carryOverLogic';
+import { useTask } from '../../app-src/context/TaskContext';
+import { Colors } from '../../app-example/constants/theme';
+import { useColorScheme } from '../../app-example/hooks/use-color-scheme';
+import { getAllTasksFlat, getTodayDate } from '../../app-src/utils/carryOverLogic';
 import dayjs from 'dayjs';
 
 /**

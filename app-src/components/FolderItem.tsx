@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
-import { Folder, Task } from '@/app-src/types';
-import { Colors } from '@/app-example/constants/theme';
-import { useColorScheme } from '@/app-example/hooks/use-color-scheme';
-import { IconSymbol } from '@/app-example/components/ui/icon-symbol';
-import { formatHours } from '@/app-src/utils/helpers';
+import { Folder, Task } from '../../app-src/types';
+import { Colors } from '../../app-example/constants/theme';
+import { useColorScheme } from '../../app-example/hooks/use-color-scheme';
+import { IconSymbol } from '../../app-example/components/ui/icon-symbol';
+import { formatHours } from '../../app-src/utils/helpers';
 
 interface FolderItemProps {
   folder: Folder;

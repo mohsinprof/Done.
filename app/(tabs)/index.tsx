@@ -13,14 +13,14 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTask } from '@/app-src/context/TaskContext';
-import { Colors } from '@/app-example/constants/theme';
-import { useColorScheme } from '@/app-example/hooks/use-color-scheme';
-import { TaskCard } from '@/app-src/components/TaskCard';
-import { ProgressBar } from '@/app-src/components/ProgressBar';
-import { getAllTasksFlat, getTodayDate } from '@/app-src/utils/carryOverLogic';
-import { formatHours, sortTasksByPriority } from '@/app-src/utils/helpers';
-import { Task as TaskCardType } from '@/app-src/types';
+import { useTask } from '../../app-src/context/TaskContext';
+import { Colors } from '../../app-example/constants/theme';
+import { useColorScheme } from '../../app-example/hooks/use-color-scheme';
+import { TaskCard } from '../../app-src/components/TaskCard';
+import { ProgressBar } from '../../app-src/components/ProgressBar';
+import { getAllTasksFlat, getTodayDate } from '../../app-src/utils/carryOverLogic';
+import { formatHours, sortTasksByPriority } from '../../app-src/utils/helpers';
+import { Task as TaskCardType } from '../../app-src/types';
 
 /**
  * Dashboard Screen - displays today's tasks and progress summary

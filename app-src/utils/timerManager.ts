@@ -4,7 +4,7 @@
  */
 
 import dayjs from 'dayjs';
-import { Session, Task } from '@/app-src/types';
+import { Session, Task } from '../../app-src/types';
 
 export interface TimerData {
   taskId: string;

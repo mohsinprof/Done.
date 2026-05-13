@@ -4,7 +4,7 @@
  */
 
 import dayjs from 'dayjs';
-import { AppState, Task, Folder, Workspace, Session } from '@/app-src/types';
+import { AppState, Task, Folder, Workspace, Session } from '../../app-src/types';
 
 /**
  * Execute daily carry-over logic

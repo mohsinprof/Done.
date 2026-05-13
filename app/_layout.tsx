@@ -3,8 +3,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/app-example/hooks/use-color-scheme';
-import { TaskProvider } from '@/app-src/context/TaskContext';
+import { useColorScheme } from '../../app-example/hooks/use-color-scheme';
+import { TaskProvider } from '../../app-src/context/TaskContext';
 
 export const unstable_settings = {
   anchor: '(tabs)',

@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '@/app-example/constants/theme';
-import { useColorScheme } from '@/app-example/hooks/use-color-scheme';
-import { formatHours } from '@/app-src/utils/helpers';
+import { Colors } from '../../app-example/constants/theme';
+import { useColorScheme } from '../../app-example/hooks/use-color-scheme';
+import { formatHours } from '../../app-src/utils/helpers';
 
 interface ProgressBarProps {
   completed: number;

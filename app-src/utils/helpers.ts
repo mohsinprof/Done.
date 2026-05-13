@@ -3,7 +3,7 @@
  */
 
 import dayjs from 'dayjs';
-import { Task, Folder, Chapter, Workspace } from '@/app-src/types';
+import { Task, Folder, Chapter, Workspace } from '../../app-src/types';
 
 /**
  * Generate unique IDs

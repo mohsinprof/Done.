@@ -4,7 +4,7 @@
  */
 
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useState } from 'react';
-import { AppState, Task, Folder, Session, Chapter, Workspace } from '@/app-src/types';
+import { AppState, Task, Folder, Session, Chapter, Workspace } from '../../app-src/types';
 import {
   loadAppState,
   saveAppState,
@@ -12,7 +12,7 @@ import {
   clearAllStorage,
   exportData,
   importData,
-} from '@/app-src/storage/asyncStorage';
+} from '../../app-src/storage/asyncStorage';
 import {
   executeDailyCarryOver,
   shouldExecuteCarryOver,
@@ -20,7 +20,7 @@ import {
   getAllTasksFlat,
   getTaskById,
   calculateTodayTotalHours,
-} from '@/app-src/utils/carryOverLogic';
+} from '../../app-src/utils/carryOverLogic';
 import {
   getElapsedMinutes,
   getElapsedSeconds,
@@ -28,7 +28,7 @@ import {
   addSessionToTask,
   createActiveSession,
   generateSessionId,
-} from '@/app-src/utils/timerManager';
+} from '../../app-src/utils/timerManager';
 import {
   generateId,
   createTask,
@@ -37,7 +37,7 @@ import {
   updateTaskInWorkspace,
   deleteItemFromWorkspace,
   findItemById,
-} from '@/app-src/utils/helpers';
+} from '../../app-src/utils/helpers';
 
 // Action types
 type Action =

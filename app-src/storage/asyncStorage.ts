@@ -4,7 +4,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState } from '@/app-src/types';
+import { AppState } from '../../app-src/types';
 
 const STORAGE_KEY = '@productivity_tracker';
 const memoryFallback = new Map<string, string>();

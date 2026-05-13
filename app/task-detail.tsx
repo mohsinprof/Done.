@@ -12,14 +12,14 @@ import {
   Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useTask } from '@/app-src/context/TaskContext';
-import { Colors } from '@/app-example/constants/theme';
-import { useColorScheme } from '@/app-example/hooks/use-color-scheme';
-import { ProgressBar } from '@/app-src/components/ProgressBar';
-import { SessionListItem } from '@/app-src/components/SessionListItem';
-import { getTaskById, getTodayDate } from '@/app-src/utils/carryOverLogic';
-import { getTaskSessionsForDate } from '@/app-src/utils/timerManager';
-import { formatHours, formatDateTime } from '@/app-src/utils/helpers';
+import { useTask } from '../../app-src/context/TaskContext';
+import { Colors } from '../../app-example/constants/theme';
+import { useColorScheme } from '../../app-example/hooks/use-color-scheme';
+import { ProgressBar } from '../../app-src/components/ProgressBar';
+import { SessionListItem } from '../../app-src/components/SessionListItem';
+import { getTaskById, getTodayDate } from '../../app-src/utils/carryOverLogic';
+import { getTaskSessionsForDate } from '../../app-src/utils/timerManager';
+import { formatHours, formatDateTime } from '../../app-src/utils/helpers';
 
 /**
  * Task Detail Screen - shows comprehensive task information
