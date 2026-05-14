@@ -14,8 +14,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTask } from '../../app-src/context/TaskContext';
-import { Colors } from '../../app-example/constants/theme';
-import { useColorScheme } from '../../app-example/hooks/use-color-scheme';
+import { Colors } from '../../app-src/constants/theme';
+import { useColorScheme } from '../../app-src/hooks/use-color-scheme';
 import { TaskCard } from '../../app-src/components/TaskCard';
 import { ProgressBar } from '../../app-src/components/ProgressBar';
 import { getAllTasksFlat, getTodayDate } from '../../app-src/utils/carryOverLogic';
@@ -142,7 +142,7 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}>
         {/* Today's Summary Card */}
         <View style={[styles.summaryCard, { backgroundColor: colors.tint, opacity: 0.95 }]}>
-          <Text style={styles.summaryTitle}>Today's Progress</Text>
+          <Text style={styles.summaryTitle}>Today&apos;s Progress</Text>
 
           <View style={styles.summaryStats}>
             <View style={styles.statBlock}>

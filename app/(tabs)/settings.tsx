@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import * as Updates from 'expo-updates';
 import { useTask } from '../../app-src/context/TaskContext';
-import { Colors } from '../../app-example/constants/theme';
-import { useColorScheme } from '../../app-example/hooks/use-color-scheme';
+import { Colors } from '../../app-src/constants/theme';
+import { useColorScheme } from '../../app-src/hooks/use-color-scheme';
 
 /**
  * Settings Screen - app configuration and data management
@@ -249,7 +249,7 @@ export default function SettingsScreen() {
         <View style={[styles.tipsBox, { backgroundColor: colors.background, borderColor: colors.tabIconDefault }]}>
           <Text style={[styles.tipsTitle, { color: colors.text }]}>Daily Carry-Over</Text>
           <Text style={[styles.tipsText, { color: colors.tabIconDefault }]}>
-            If you don't complete your daily target hours, the remaining hours automatically carry over to the next day.
+            If you don&apos;t complete your daily target hours, the remaining hours automatically carry over to the next day.
           </Text>
         </View>
 

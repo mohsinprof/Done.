@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Done.",
+    "name": "Done",
     "slug": "done-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -18,7 +18,8 @@
       "package": "com.mohsinprof.doneapp"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mohsinprof.doneapp"
     },
     "web": {
       "output": "static",
@@ -37,11 +38,21 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "newArchEnabled": true,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "kotlinVersion": "2.0.21"
+          }
+        }
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "updates": {
       "checkAutomatically": "ON_ERROR_RECOVERY"

@@ -77,6 +77,7 @@ async function getAllKeysSafe(): Promise<string[]> {
 /**
  * Load entire app state from storage
  * Returns default/empty state if nothing exists
+ * Merges defaults over persisted state to ensure all required fields are present
  */
 export async function loadAppState(): Promise<AppState> {
   try {
@@ -84,7 +85,9 @@ export async function loadAppState(): Promise<AppState> {
     if (!stored) {
       return getDefaultAppState();
     }
-    return JSON.parse(stored);
+    const parsed = JSON.parse(stored);
+    // Merge defaults to ensure all required fields exist (e.g., themeMode from old saves)
+    return { ...getDefaultAppState(), ...parsed };
   } catch (error) {
     console.error('Error loading app state:', error);
     return getDefaultAppState();

@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useTask } from '../../app-src/context/TaskContext';
-import { Colors } from '../../app-example/constants/theme';
-import { useColorScheme } from '../../app-example/hooks/use-color-scheme';
+import { Colors } from '../../app-src/constants/theme';
+import { useColorScheme } from '../../app-src/hooks/use-color-scheme';
 import { FolderItem } from '../../app-src/components/FolderItem';
 import { getAllTasksFlat } from '../../app-src/utils/carryOverLogic';
 import { formatHours } from '../../app-src/utils/helpers';
