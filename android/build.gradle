@@ -2,7 +2,8 @@
 
 buildscript {
   ext {
-    kspVersion = "2.1.20-1.0.29"
+    kotlinVersion = "2.1.20"
+    kspVersion = "2.1.20-1.0.32"
   }
   repositories {
     google()
