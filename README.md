@@ -25,7 +25,7 @@ Done is an Expo-based productivity app for tracking tasks, work sessions, and da
 - 🔔 Haptic-friendly interactions and native date/time pickers.
 
 ---
-
+Direct Download link https://expo.dev/accounts/mohsinprof/projects/done-app/builds/ebda20a9-df14-4775-a3c1-410553fc252d
 ## 🗺️ Roadmap — What's Coming
 
 There's a lot still to build. Here are features planned or in progress:
