@@ -5,27 +5,41 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#1E2952';
-const tintColorDark = '#94A3B8';
+const tintColorLight = '#6366f1'; // Indigo 500
+const tintColorDark = '#818cf8'; // Indigo 400
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#F8FAFC',
+    text: '#1e293b', // Slate 800
+    background: '#f8fafc', // Slate 50
     tint: tintColorLight,
-    icon: '#64748B',
-    tabIconDefault: '#64748B',
+    icon: '#64748b',
+    tabIconDefault: '#94a3b8',
     tabIconSelected: tintColorLight,
+    card: '#ffffff',
+    border: '#e2e8f0',
   },
   dark: {
-    text: '#F8FAFC',
-    background: '#1E2952',
+    text: '#f8fafc', // Slate 50
+    background: '#0f172a', // Slate 900
     tint: tintColorDark,
-    icon: '#94A3B8',
-    tabIconDefault: '#94A3B8',
+    icon: '#94a3b8',
+    tabIconDefault: '#475569',
     tabIconSelected: tintColorDark,
+    card: '#1e293b', // Slate 800
+    border: '#334155',
   },
 };
+
+export const EVENT_COLORS = [
+  '#6366f1', // Indigo
+  '#ef4444', // Red
+  '#10b981', // Emerald
+  '#f59e0b', // Amber
+  '#8b5cf6', // Violet
+  '#ec4899', // Pink
+  '#06b6d4', // Cyan
+];
 
 export const Fonts = Platform.select({
   ios: {

@@ -52,25 +52,36 @@ export function TimerModal({ visible, taskId, onClose }: TimerModalProps) {
     }
   }, [taskId, startTimer, state.activeTimerTaskId]);
 
+  // Use a derived piece of state to track if we're "technically" active even when paused
+  const isTechnicallyActive = !!state.activeTimerTaskId || (taskId && getTaskByIdFromContext(taskId)?.currentSessionElapsedSeconds! > 0);
+
   // Live timer update
   useEffect(() => {
-    if (!visible || !state.activeTimerStartTime) {
+    if (!visible) {
       setElapsedSeconds(0);
       return;
     }
 
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const sessionElapsed = Math.floor((now - state.activeTimerStartTime!) / 1000);
-      
-      const currentTask = state.activeTimerTaskId ? getTaskByIdFromContext(state.activeTimerTaskId) : null;
-      const accumulated = currentTask?.currentSessionElapsedSeconds || 0;
-      
-      setElapsedSeconds(sessionElapsed + accumulated);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [visible, state.activeTimerStartTime]);
+    // If active, run interval. If paused, just set to the accumulated time once.
+    if (state.activeTimerStartTime) {
+      interval = setInterval(() => {
+        const now = Date.now();
+        // live elapsed reflects ONLY the current segment
+        const liveSegmentSeconds = Math.floor((now - state.activeTimerStartTime!) / 1000);
+        
+        const currentTask = state.activeTimerTaskId ? getTaskByIdFromContext(state.activeTimerTaskId) : null;
+        const accumulated = currentTask?.currentSessionElapsedSeconds || 0;
+        
+        setElapsedSeconds(liveSegmentSeconds + accumulated);
+      }, 1000);
+    } else {
+      const currentTask = taskId ? getTaskByIdFromContext(taskId) : null;
+      setElapsedSeconds(currentTask?.currentSessionElapsedSeconds || 0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [visible, state.activeTimerStartTime, state.activeTimerTaskId, taskId]);
 
   const formatTimerDisplay = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -95,10 +106,15 @@ export function TimerModal({ visible, taskId, onClose }: TimerModalProps) {
   };
 
   const handleSwitchTask = (newTaskId: string) => {
-    // Stop current timer and start new one
-    if (state.activeTimerTaskId) {
+    // Current task
+    const oldTaskId = state.activeTimerTaskId;
+    
+    // Stop current timer (this handles persistence and cleanup)
+    if (oldTaskId) {
       stopTimer('');
     }
+    
+    // Update selected ID and start new timer
     setSelectedTaskId(newTaskId);
     startTimer(newTaskId);
   };
@@ -108,93 +124,121 @@ export function TimerModal({ visible, taskId, onClose }: TimerModalProps) {
 
   return (
     <Modal
-      visible={visible && state.activeTimerTaskId !== null}
+      visible={visible}
       transparent
       animationType="slide"
       onRequestClose={onClose}>
       <SafeAreaView style={[styles.container, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
         {/* Modal Content */}
-        <View style={[styles.modal, { backgroundColor: '#4CAF50' }]}>
-          {/* Close Button */}
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={onClose}>
-            <Text style={styles.closeButtonText}>✕</Text>
-          </TouchableOpacity>
-
-          {/* Timer Display */}
-          <View style={styles.timerContent}>
-            <Text style={styles.taskNameDisplay}>{activeTaskName}</Text>
-            <Text style={styles.timerDisplay}>{formatTimerDisplay(elapsedSeconds)}</Text>
-            <Text style={styles.durationDisplay}>
-              {formatMinutes(Math.floor(elapsedSeconds / 60))}
-            </Text>
-          </View>
-
-          {/* Notes Input (shown before stopping) */}
-          {showNotesInput && (
-            <View style={styles.notesSection}>
-              <Text style={styles.notesLabel}>Add notes (optional)</Text>
-              <TextInput
-                style={styles.notesInput}
-                placeholder="What did you work on?"
-                placeholderTextColor="rgba(255,255,255,0.5)"
-                value={sessionNotes}
-                onChangeText={setSessionNotes}
-                multiline
-              />
-            </View>
-          )}
-
-          {/* Task Picker */}
-          <View style={styles.taskPickerSection}>
-            <Text style={styles.taskPickerLabel}>Or switch task:</Text>
-            <View style={styles.taskPickerContainer}>
-              {allTasks.slice(0, 3).map((task) => (
-                <TouchableOpacity
-                  key={task.id}
-                  onPress={() => handleSwitchTask(task.id)}
-                  style={[
-                    styles.taskPickerButton,
-                    selectedTaskId === task.id && styles.taskPickerButtonActive,
-                  ]}>
-                  <Text
-                    style={[
-                      styles.taskPickerButtonText,
-                      selectedTaskId === task.id && styles.taskPickerButtonTextActive,
-                    ]}>
-                    {task.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Control Buttons */}
-          <View style={styles.buttonsRow}>
+        {!state.activeTimerTaskId ? (
+          <View style={[styles.modal, { backgroundColor: colors.background }]}>
             <TouchableOpacity
-              style={[styles.button, { backgroundColor: 'rgba(255,255,255,0.2)' }]}
-              onPress={() => pauseTimer()}>
-              <Text style={styles.buttonText}>Pause</Text>
+              style={styles.closeButton}
+              onPress={onClose}>
+              <Text style={[styles.closeButtonText, { color: colors.text }]}>✕</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.button, styles.stopButton]}
-              onPress={handleStopTimer}>
-              <Text style={styles.buttonText}>
-                {showNotesInput ? 'Save & Stop' : 'Stop'}
+            <View style={styles.timerContent}>
+              <Text style={[styles.taskNameDisplay, { color: colors.text }]}>Paused</Text>
+              <Text style={[styles.timerDisplay, { color: colors.text }]}>
+                {formatTimerDisplay(elapsedSeconds || (selectedTaskId ? (getTaskByIdFromContext(selectedTaskId)?.currentSessionElapsedSeconds || 0) : 0))}
               </Text>
+            </View>
+            <View style={styles.buttonsRow}>
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: colors.tint }]}
+                onPress={() => selectedTaskId && startTimer(selectedTaskId)}>
+                <Text style={styles.buttonText}>Resume</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.stopButton]}
+                onPress={handleStopTimer}>
+                <Text style={styles.buttonText}>Stop & Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.modal, { backgroundColor: '#4CAF50' }]}>
+            {/* Close Button */}
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={onClose}>
+              <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
 
+            {/* Timer Display */}
+            <View style={styles.timerContent}>
+              <Text style={styles.taskNameDisplay}>{activeTaskName}</Text>
+              <Text style={styles.timerDisplay}>{formatTimerDisplay(elapsedSeconds)}</Text>
+              <Text style={styles.durationDisplay}>
+                {formatMinutes(Math.floor(elapsedSeconds / 60))}
+              </Text>
+            </View>
+
+            {/* Notes Input (shown before stopping) */}
             {showNotesInput && (
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={() => setShowNotesInput(false)}>
-                <Text style={styles.buttonText}>Back</Text>
-              </TouchableOpacity>
+              <View style={styles.notesSection}>
+                <Text style={styles.notesLabel}>Add notes (optional)</Text>
+                <TextInput
+                  style={styles.notesInput}
+                  placeholder="What did you work on?"
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  value={sessionNotes}
+                  onChangeText={setSessionNotes}
+                  multiline
+                />
+              </View>
             )}
+
+            {/* Task Picker */}
+            <View style={styles.taskPickerSection}>
+              <Text style={styles.taskPickerLabel}>Or switch task:</Text>
+              <View style={styles.taskPickerContainer}>
+                {allTasks.slice(0, 3).map((task) => (
+                  <TouchableOpacity
+                    key={task.id}
+                    onPress={() => handleSwitchTask(task.id)}
+                    style={[
+                      styles.taskPickerButton,
+                      selectedTaskId === task.id && styles.taskPickerButtonActive,
+                    ]}>
+                    <Text
+                      style={[
+                        styles.taskPickerButtonText,
+                        selectedTaskId === task.id && styles.taskPickerButtonTextActive,
+                      ]}>
+                      {task.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Control Buttons */}
+            <View style={styles.buttonsRow}>
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: 'rgba(255,255,255,0.2)' }]}
+                onPress={() => pauseTimer()}>
+                <Text style={styles.buttonText}>Pause</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.button, styles.stopButton]}
+                onPress={handleStopTimer}>
+                <Text style={styles.buttonText}>
+                  {showNotesInput ? 'Save & Stop' : 'Stop'}
+                </Text>
+              </TouchableOpacity>
+
+              {showNotesInput && (
+                <TouchableOpacity
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={() => setShowNotesInput(false)}>
+                  <Text style={styles.buttonText}>Back</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-        </View>
+        )}
       </SafeAreaView>
     </Modal>
   );

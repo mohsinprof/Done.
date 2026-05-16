@@ -59,13 +59,25 @@ export function getDayOfWeek(timestamp: number): string {
  * Format hours to human readable string (avoiding 0.6666h)
  */
 export function formatHours(hours: number): string {
-  const totalMinutes = Math.round(hours * 60);
-  if (totalMinutes < 60) {
-    return `${totalMinutes}m`;
+  if (hours === undefined || hours === null || isNaN(hours)) return '0m';
+  const totalSeconds = Math.round(hours * 3600);
+  const hrs = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+
+  if (hrs > 0) {
+    if (mins > 0) {
+      return `${hrs}h ${mins}m`;
+    }
+    return `${hrs}h`;
   }
-  const hrs = Math.floor(totalMinutes / 60);
-  const mins = totalMinutes % 60;
-  return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
+  if (mins > 0) {
+    return `${mins}m`;
+  }
+  if (totalSeconds > 0) {
+    return `${secs}s`;
+  }
+  return '0m';
 }
 
 /**
@@ -77,8 +89,10 @@ export function createTask(
   parentFolderId: string | null = null,
   totalChapters: number = 0,
   targetTotalHours: number = 0,
-  daysToComplete: number | null = null,
-  completionPriority: 'hours' | 'chapters' | 'days' = 'hours'
+  totalDaysGoal: number | null = null,
+  completionPriority: 'hours' | 'chapters' | 'days' | 'none' = 'hours',
+  scheduledDate?: string,
+  deadlineDate?: string
 ): Task {
   return {
     id: generateId('task'),
@@ -86,6 +100,8 @@ export function createTask(
     parentFolderId,
     dailyTargetHours,
     targetTotalHours,
+    totalDaysGoal: totalDaysGoal || 0,
+    daysWorkedCount: 0,
     isLifetimeCompleted: false,
     remainingHours: 0,
     totalCompletedHours: 0,
@@ -96,11 +112,9 @@ export function createTask(
     completedChaptersCount: 0,
     sessions: [],
     completionPriority,
-    autoDeleteConfig: {
-      enabled: daysToComplete !== null,
-      delayType: 'days',
-      delayValue: daysToComplete || 0
-    }
+    scheduledDate,
+    deadlineDate,
+    isPlanned: !!(scheduledDate || deadlineDate),
   };
 }
 

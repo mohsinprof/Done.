@@ -19,7 +19,6 @@ import { AppState, Task, Folder, Workspace, Session } from '../../app-src/types'
  * - Preserve all sessions (never delete history)
  */
 export function executeDailyCarryOver(state: AppState, today: string): AppState {
-  const yesterday = dayjs(today).subtract(1, 'day').format('YYYY-MM-DD');
   const lastAccess = state.lastAccessDate;
 
   // Perform scheduled deletions
@@ -36,8 +35,16 @@ export function executeDailyCarryOver(state: AppState, today: string): AppState 
 
   console.log('Executing daily carry-over from', lastAccess, 'to', today);
 
-  // Process all tasks recursively
-  const updatedWorkspace = carryOverWorkspace(cleanWorkspace, today);
+  // Calculate day difference for multi-day carry-over (Vacation Bug Fix)
+  const lastDate = dayjs(lastAccess);
+  const todayDate = dayjs(today);
+  const diffDays = todayDate.diff(lastDate, 'day');
+
+  // Process all tasks recursively for each missed day
+  let updatedWorkspace = cleanWorkspace;
+  for (let i = 0; i < diffDays; i++) {
+    updatedWorkspace = carryOverWorkspace(updatedWorkspace, today);
+  }
 
   return {
     ...state,
@@ -107,22 +114,36 @@ function carryOverChild(child: Folder | Task, today: string): Folder | Task {
  * Apply carry-over logic to a single task
  */
 function carryOverTask(task: Task, today: string): Task {
-  const { dailyTargetHours, completedTodayHours, remainingHours } = task;
+  const { dailyTargetHours, completedTodayHours, remainingHours, completionPriority, totalDaysGoal, daysWorkedCount } = task;
 
   // Calculate unfinished hours from today
-  const unfinishedToday = dailyTargetHours - completedTodayHours;
+  // If target + carry-over was reached, unfinished is 0
+  const dailyTargetTotal = dailyTargetHours + remainingHours;
+  const unfinishedToday = dailyTargetTotal - completedTodayHours;
   
   // Hours to carry forward (only if positive)
   const hoursToCarry = Math.max(0, unfinishedToday);
 
-  // New remaining hours = hours carried from today + any already remaining
-  const newRemainingHours = remainingHours + hoursToCarry;
+  // New remaining hours
+  const newRemainingHours = hoursToCarry;
+
+  let newDaysWorkedCount = daysWorkedCount || 0;
+  let isLifetimeCompleted = task.isLifetimeCompleted;
+
+  // If daily goal was met, increment day counter for 'days' priority
+  if (completedTodayHours >= dailyTargetTotal) {
+    newDaysWorkedCount += 1;
+    if (completionPriority === 'days' && totalDaysGoal && newDaysWorkedCount >= totalDaysGoal) {
+      isLifetimeCompleted = true;
+    }
+  }
 
   return {
     ...task,
     remainingHours: newRemainingHours,
     completedTodayHours: 0, // Reset daily counter
-    // totalCompletedHours and sessions are NEVER changed
+    daysWorkedCount: newDaysWorkedCount,
+    isLifetimeCompleted,
   };
 }
 

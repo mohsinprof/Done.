@@ -12,12 +12,14 @@ import {
   Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import dayjs from 'dayjs';
 import { useTask } from '../app-src/context/TaskContext';
 import { Colors } from '../app-src/constants/theme';
 import { useColorScheme } from '../app-src/hooks/use-color-scheme';
 import { ProgressBar } from '../app-src/components/ProgressBar';
 import { SessionListItem } from '../app-src/components/SessionListItem';
 import { getTaskById, getTodayDate } from '../app-src/utils/carryOverLogic';
+import { Task } from '../app-src/types';
 import { getTaskSessionsForDate } from '../app-src/utils/timerManager';
 import { formatHours, formatDateTime } from '../app-src/utils/helpers';
 
@@ -28,8 +30,33 @@ export default function TaskDetailScreen() {
   const systemColorScheme = useColorScheme();
   const router = useRouter();
   const { taskId } = useLocalSearchParams();
-  const { state, startTimer, updateTask, addChapter, updateChapterStatus, deleteItem, updateCompletedChapters, restartTask } =
-    useTask();
+  const { 
+    state, 
+    startTimer, 
+    updateTask, 
+    addChapter, 
+    updateChapterStatus, 
+    deleteItem, 
+    updateCompletedChapters, 
+    restartTask,
+    getTaskTodaySeconds,
+    getTaskTotalSeconds
+  } = useTask();
+
+  const [liveTrigger, setLiveTrigger] = useState(0);
+  const isActive = state.activeTimerTaskId === taskId;
+
+  React.useEffect(() => {
+    let interval: any;
+    if (isActive) {
+      interval = setInterval(() => {
+        setLiveTrigger(prev => prev + 1);
+      }, 1000);
+    } else {
+      setLiveTrigger(0);
+    }
+    return () => clearInterval(interval);
+  }, [isActive]);
 
   const colors = Colors[state.themeMode === 'system' ? (systemColorScheme ?? 'light') : state.themeMode];
 
@@ -68,8 +95,7 @@ export default function TaskDetailScreen() {
     );
   }
 
-  const todayTotal = todaySessions.reduce((sum, s) => sum + s.duration, 0);
-  const todayHours = todayTotal / 60;
+  const todayHours = task ? getTaskTodaySeconds(task) / 3600 : 0;
 
   const handleAddChapter = () => {
     if (!chapterName.trim()) {
@@ -125,9 +151,17 @@ export default function TaskDetailScreen() {
 
   const handleDurationEdit = () => {
     setEditType('duration');
-    setEditValue((task.autoDeleteConfig?.delayValue || 0).toString());
+    setEditValue((task.totalDaysGoal || 0).toString());
     setIsEditModalVisible(true);
   };
+
+  const currentCompletedTodaySeconds = getTaskTodaySeconds(task);
+  const dailyTargetSeconds = Math.round((task.dailyTargetHours + (task.remainingHours || 0)) * 3600);
+  const isTodayGoalMet = currentCompletedTodaySeconds >= dailyTargetSeconds;
+
+  const remainingDays = task.completionPriority === 'days'
+    ? Math.max(0, (task.totalDaysGoal || 0) - (task.daysWorkedCount || 0) - (isTodayGoalMet ? 1 : 0))
+    : 0;
 
   const saveEdit = () => {
     if (!task) return;
@@ -138,28 +172,45 @@ export default function TaskDetailScreen() {
         break;
       case 'dailyTarget':
         const hours = parseFloat(editValue || '0');
-        if (hours > 0) updateTask(task.id, { dailyTargetHours: hours });
+        if (hours >= 0) updateTask(task.id, { dailyTargetHours: hours });
         break;
       case 'totalGoal':
         const goal = parseFloat(editValue || '0');
+        const currentTotal = getTaskTotalSeconds(task) / 3600;
         updateTask(task.id, { 
           targetTotalHours: goal, 
-          isLifetimeCompleted: goal > 0 ? task.totalCompletedHours >= goal : false 
+          isLifetimeCompleted: goal > 0 ? currentTotal >= goal : task.isLifetimeCompleted
         });
         break;
       case 'chapters':
-        const chapters = parseInt(editValue || '0');
-        updateTask(task.id, { totalChapters: chapters });
+        const chapters = parseInt(editValue || '0', 10);
+        updateTask(task.id, { 
+          totalChapters: chapters,
+          isLifetimeCompleted: (chapters > 0 && task.completionPriority === 'chapters') 
+            ? (task.completedChaptersCount || 0) >= chapters 
+            : task.isLifetimeCompleted
+        });
         break;
       case 'duration':
-        const days = parseInt(editValue || '0');
-        updateTask(task.id, { 
-          autoDeleteConfig: { 
-            enabled: days > 0, 
-            delayType: 'days', 
-            delayValue: days 
-          } 
-        });
+        const daysStr = editValue || '0';
+        const days = parseInt(daysStr, 10);
+        const start = task.scheduledDate || dayjs(task.createdAt).format('YYYY-MM-DD');
+        
+        // If they enter 10 days, we want to end on day 10.
+        // Start (Day 1) + 9 more days = Day 10.
+        const calculatedDeadline = days > 0 
+          ? dayjs(start).add(days - 1, 'day').format('YYYY-MM-DD') 
+          : undefined;
+        
+        const updates: Partial<Task> = { 
+          totalDaysGoal: days,
+          deadlineDate: calculatedDeadline,
+          isLifetimeCompleted: (days > 0 && task.completionPriority === 'days')
+            ? (task.daysWorkedCount || 0) >= days
+            : task.isLifetimeCompleted
+        };
+
+        updateTask(task.id, updates);
         break;
     }
     setIsEditModalVisible(false);
@@ -195,9 +246,15 @@ export default function TaskDetailScreen() {
 
           <View style={styles.headerStats}>
             <View style={styles.headerStat}>
-              <Text style={styles.headerStatLabel}>Total</Text>
+              <Text style={styles.headerStatLabel}>
+                {task.completionPriority === 'days' ? 'Days Done' : (task.completionPriority === 'chapters' ? 'Chapters' : 'Total')}
+              </Text>
               <Text style={styles.headerStatValue}>
-                {formatHours(task.totalCompletedHours)}
+                {task.completionPriority === 'days' 
+                  ? `${task.daysWorkedCount || 0}d`
+                  : task.completionPriority === 'chapters'
+                  ? `${task.completedChaptersCount || 0}`
+                  : formatHours(getTaskTotalSeconds(task) / 3600)}
               </Text>
             </View>
             <View style={styles.headerStat}>
@@ -205,9 +262,15 @@ export default function TaskDetailScreen() {
               <Text style={styles.headerStatValue}>{formatHours(todayHours)}</Text>
             </View>
             <View style={styles.headerStat}>
-              <Text style={styles.headerStatLabel}>Remaining</Text>
+              <Text style={styles.headerStatLabel}>
+                {task.completionPriority === 'days' ? 'Days Rem.' : (task.completionPriority === 'chapters' ? 'Chapters Rem.' : 'Remaining')}
+              </Text>
               <Text style={styles.headerStatValue}>
-                {formatHours(task.remainingHours)}
+                {task.completionPriority === 'days'
+                  ? `${remainingDays}d`
+                  : task.completionPriority === 'chapters'
+                  ? `${Math.max(0, (task.totalChapters || 0) - (task.completedChaptersCount || 0))}`
+                  : formatHours(Math.max(0, (task.targetTotalHours || 0) - getTaskTotalSeconds(task) / 3600))}
               </Text>
             </View>
           </View>
@@ -229,8 +292,8 @@ export default function TaskDetailScreen() {
           </Text>
 
           <ProgressBar
-            completed={task.completedTodayHours}
-            target={task.dailyTargetHours}
+            completed={getTaskTodaySeconds(task) / 3600}
+            target={task.dailyTargetHours + (task.remainingHours || 0)}
             height={12}
           />
         </View>
@@ -258,9 +321,9 @@ export default function TaskDetailScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity onPress={handleDurationEdit} style={styles.settingItem}>
-              <Text style={styles.settingLabel}>Duration</Text>
+              <Text style={styles.settingLabel}>Total Days</Text>
               <Text style={[styles.settingValue, { color: colors.tint }]}>
-                {task.autoDeleteConfig?.enabled ? `${task.autoDeleteConfig.delayValue} days` : 'None'}
+                {task.totalDaysGoal ? `${task.totalDaysGoal} days` : 'None'}
               </Text>
             </TouchableOpacity>
 

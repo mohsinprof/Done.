@@ -11,7 +11,10 @@ import {
   Modal,
   TextInput,
   Alert,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import dayjs from 'dayjs';
 import { useRouter } from 'expo-router';
 import { useTask } from '../../app-src/context/TaskContext';
 import { Colors } from '../../app-src/constants/theme';
@@ -38,10 +41,14 @@ export default function DashboardScreen() {
   const [taskName, setTaskName] = useState('');
   const [dailyHours, setDailyHours] = useState('2');
   const [dailyMinutes, setDailyMinutes] = useState('0');
-  const [totalHoursGoal, setTotalHoursGoal] = useState('0');
-  const [daysGoal, setDaysGoal] = useState('');
-  const [totalChapters, setTotalChapters] = useState('0');
-  const [completionPriority, setCompletionPriority] = useState<'hours' | 'chapters' | 'days'>('hours');
+  const [priorityType, setPriorityType] = useState<'hours' | 'chapters' | 'days' | 'none'>('hours');
+  const [totalGoal, setTotalGoal] = useState('0');
+  const [startDate, setStartDate] = useState(getTodayDate());
+  const [deadline, setDeadline] = useState('');
+  
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showDeadlinePicker, setShowDeadlinePicker] = useState(false);
+
   const [activeTaskName, setActiveTaskName] = useState<string | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
 
@@ -49,8 +56,18 @@ export default function DashboardScreen() {
   useEffect(() => {
     const allTasks = getAllTasksFlat(state.workspace);
     const sortedTasks = sortTasksByPriority(allTasks);
+    
+    // Custom sort: Put active task on TOP
+    if (state.activeTimerTaskId) {
+      const activeIdx = sortedTasks.findIndex(t => t.id === state.activeTimerTaskId);
+      if (activeIdx > -1) {
+        const [activeTask] = sortedTasks.splice(activeIdx, 1);
+        sortedTasks.unshift(activeTask);
+      }
+    }
+    
     setTasks(sortedTasks);
-  }, [state.workspace]);
+  }, [state.workspace, state.activeTimerTaskId]);
 
   // Update active task display
   useEffect(() => {
@@ -78,6 +95,53 @@ export default function DashboardScreen() {
     return () => clearInterval(interval);
   }, [state.activeTimerStartTime, state.activeTimerTaskId]);
 
+  const handleTotalGoalChange = (val: string) => {
+    setTotalGoal(val);
+    if (priorityType === 'days' && val && startDate) {
+      const days = parseInt(val);
+      if (!isNaN(days) && days > 0) {
+        const calculatedDeadline = dayjs(startDate).add(days - 1, 'day').format('YYYY-MM-DD');
+        setDeadline(calculatedDeadline);
+      }
+    }
+  };
+
+  const handleDeadlineChange = (val: string) => {
+    setDeadline(val);
+    if (val.length === 10 && startDate) {
+      const start = dayjs(startDate);
+      const end = dayjs(val);
+      if (end.isValid() && (end.isSame(start) || end.isAfter(start))) {
+        const diff = end.diff(start, 'day') + 1;
+        setTotalGoal(diff.toString());
+        setPriorityType('days');
+      }
+    }
+  };
+
+  const onStartDateChange = (event: any, selectedDate?: Date) => {
+    setShowStartDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      const formatted = dayjs(selectedDate).format('YYYY-MM-DD');
+      setStartDate(formatted);
+      // Recalculate deadline if priority is days
+      if (priorityType === 'days' && totalGoal) {
+        const days = parseInt(totalGoal);
+        if (!isNaN(days) && days > 0) {
+          setDeadline(dayjs(formatted).add(days - 1, 'day').format('YYYY-MM-DD'));
+        }
+      }
+    }
+  };
+
+  const onDeadlineChange = (event: any, selectedDate?: Date) => {
+    setShowDeadlinePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      const formatted = dayjs(selectedDate).format('YYYY-MM-DD');
+      handleDeadlineChange(formatted);
+    }
+  };
+
   const handleRefresh = () => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 300);
@@ -98,32 +162,35 @@ export default function DashboardScreen() {
       return;
     }
 
-    const totalGoalInput = parseFloat(totalHoursGoal) || 0;
-    // If user sets a goal of 0 or doesn't set it, but sets a daily target, 
-    // and it's intended to be a one-time task, we should handle it.
-    // However, to keep it simple: if totalGoal is 0, we'll default it to the dailyTarget 
-    // so it finishes as soon as today's work is done.
-    const totalGoal = totalGoalInput === 0 ? dailyTotal : totalGoalInput;
+    const goalVal = parseFloat(totalGoal) || 0;
     
-    const days = parseInt(daysGoal) || null;
+    // Call Context AddTask with Pro fields
+    addTask(
+      taskName.trim(), 
+      dailyTotal, 
+      null, 
+      priorityType === 'chapters' ? goalVal : 0, 
+      priorityType === 'hours' ? goalVal : 0, 
+      priorityType === 'days' ? goalVal : null, 
+      priorityType,
+      startDate
+    );
 
-    addTask(taskName.trim(), dailyTotal, null, parseInt(totalChapters) || 0, totalGoal, days, completionPriority);
     setTaskName('');
     setDailyHours('2');
     setDailyMinutes('0');
-    setTotalHoursGoal('0');
-    setDaysGoal('');
-    setTotalChapters('0');
-    setCompletionPriority('hours');
+    setTotalGoal('0');
+    setPriorityType('hours');
+    setStartDate(getTodayDate());
+    setDeadline('');
     setShowAddModal(false);
   };
 
-  const todayTotal = getTodayTotalHours();
   const activeTasks = tasks.filter(t => !t.isLifetimeCompleted);
   const completedTasks = tasks.filter(t => t.isLifetimeCompleted);
 
+  const todayCompleted = getTodayTotalHours();
   const totalDailyTarget = activeTasks.reduce((sum, t) => sum + t.dailyTargetHours, 0);
-  const todayCompleted = tasks.reduce((sum, t) => sum + t.completedTodayHours, 0);
 
   const formatElapsedTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -140,22 +207,26 @@ export default function DashboardScreen() {
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         contentContainerStyle={styles.scrollContent}>
+        
+        {/* Dashboard Banner Tip */}
+        <View style={[styles.infoBanner, { backgroundColor: colors.tint + '15' }]}>
+           <Text style={[styles.infoText, { color: colors.tint }]}>
+             Future tasks can be added in the Calendar
+           </Text>
+        </View>
+
         {/* Today's Summary Card */}
         <View style={[styles.summaryCard, { backgroundColor: colors.tint, opacity: 0.95 }]}>
           <Text style={styles.summaryTitle}>Today&apos;s Progress</Text>
 
           <View style={styles.summaryStats}>
             <View style={styles.statBlock}>
-              <Text style={styles.statBlockLabel}>Total Hours</Text>
-              <Text style={styles.statBlockValue}>{formatHours(todayTotal)}</Text>
-            </View>
-            <View style={styles.statBlock}>
-              <Text style={styles.statBlockLabel}>Target</Text>
-              <Text style={styles.statBlockValue}>{formatHours(totalDailyTarget)}</Text>
-            </View>
-            <View style={styles.statBlock}>
-              <Text style={styles.statBlockLabel}>Completed</Text>
+              <Text style={styles.statBlockLabel}>Today&apos;s Work</Text>
               <Text style={styles.statBlockValue}>{formatHours(todayCompleted)}</Text>
+            </View>
+            <View style={styles.statBlock}>
+              <Text style={styles.statBlockLabel}>Today&apos;s Goal</Text>
+              <Text style={styles.statBlockValue}>{formatHours(totalDailyTarget)}</Text>
             </View>
           </View>
 
@@ -268,138 +339,191 @@ export default function DashboardScreen() {
           </View>
 
           <View style={styles.modalContent}>
-            <Text style={[styles.modalLabel, { color: colors.text }]}>Task Name</Text>
-            <TextInput
-              style={[
-                styles.modalInput,
-                {
-                  backgroundColor: colors.tabIconDefault,
-                  color: colors.text,
-                  borderColor: colors.tint,
-                },
-              ]}
-              placeholder="e.g., Study, FYP, Reading"
-              placeholderTextColor={colors.tabIconDefault}
-              value={taskName}
-              onChangeText={setTaskName}
-            />
-
-            <Text style={[styles.modalLabel, { color: colors.text }]}>Daily Target</Text>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <View style={{ flex: 1 }}>
-                <TextInput
-                  style={[
-                    styles.modalInput,
-                    {
-                      backgroundColor: colors.tabIconDefault,
-                      color: colors.text,
-                      borderColor: colors.tint,
-                    },
-                  ]}
-                  placeholder="Hours"
-                  placeholderTextColor={colors.tabIconDefault}
-                  value={dailyHours}
-                  onChangeText={setDailyHours}
-                  keyboardType="decimal-pad"
-                />
-                <Text style={{ fontSize: 10, color: colors.text, marginTop: -15, marginBottom: 10 }}>Hours</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <TextInput
-                  style={[
-                    styles.modalInput,
-                    {
-                      backgroundColor: colors.tabIconDefault,
-                      color: colors.text,
-                      borderColor: colors.tint,
-                    },
-                  ]}
-                  placeholder="Minutes"
-                  placeholderTextColor={colors.tabIconDefault}
-                  value={dailyMinutes}
-                  onChangeText={setDailyMinutes}
-                  keyboardType="decimal-pad"
-                />
-                <Text style={{ fontSize: 10, color: colors.text, marginTop: -15, marginBottom: 10 }}>Minutes</Text>
-              </View>
-            </View>
-
-            <Text style={[styles.modalLabel, { color: colors.text }]}>How many days? (Optional)</Text>
-            <TextInput
-              style={[
-                styles.modalInput,
-                {
-                  backgroundColor: colors.tabIconDefault,
-                  color: colors.text,
-                  borderColor: colors.tint,
-                },
-              ]}
-              placeholder="e.g., 30"
-              placeholderTextColor={colors.tabIconDefault}
-              value={daysGoal}
-              onChangeText={setDaysGoal}
-              keyboardType="number-pad"
-            />
-
-            <Text style={[styles.modalLabel, { color: colors.text }]}>Total Goal (Optional)</Text>
-            <TextInput
-              style={[
-                styles.modalInput,
-                {
-                  backgroundColor: colors.tabIconDefault,
-                  color: colors.text,
-                  borderColor: colors.tint,
-                },
-              ]}
-              placeholder="e.g., 100 (hours)"
-              placeholderTextColor={colors.tabIconDefault}
-              value={totalHoursGoal}
-              onChangeText={setTotalHoursGoal}
-              keyboardType="decimal-pad"
-            />
-
-            <Text style={[styles.modalLabel, { color: colors.text }]}>Total Chapters (Optional)</Text>
-            <TextInput
-              style={[
-                styles.modalInput,
-                {
-                  backgroundColor: colors.tabIconDefault,
-                  color: colors.text,
-                  borderColor: colors.tint,
-                },
-              ]}
-              placeholder="e.g., 12"
-              placeholderTextColor={colors.tabIconDefault}
-              value={totalChapters}
-              onChangeText={setTotalChapters}
-              keyboardType="number-pad"
-            />
-
-            <Text style={[styles.modalLabel, { color: colors.text }]}>What decides completion?</Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
-              {(['hours', 'chapters', 'days'] as const).map((p) => (
-                <TouchableOpacity
-                  key={p}
-                  onPress={() => setCompletionPriority(p)}
-                  style={{
-                    flex: 1,
-                    padding: 8,
-                    borderRadius: 8,
-                    borderWidth: 1,
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={[styles.modalLabel, { color: colors.text }]}>Task Name</Text>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: colors.tabIconDefault + '22',
+                    color: colors.text,
                     borderColor: colors.tint,
-                    backgroundColor: completionPriority === p ? colors.tint : 'transparent',
-                    alignItems: 'center',
-                  }}>
-                  <Text style={{ color: completionPriority === p ? 'white' : colors.text, fontSize: 12, textTransform: 'capitalize' }}>{p}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                  },
+                ]}
+                placeholder="e.g., Study, Project, Reading"
+                placeholderTextColor={colors.tabIconDefault}
+                value={taskName}
+                onChangeText={setTaskName}
+              />
 
-            <TouchableOpacity
-              onPress={handleAddTask}
-              style={[styles.modalButton, { backgroundColor: colors.tint }]}>
-              <Text style={styles.modalButtonText}>Create Task</Text>
-            </TouchableOpacity>
+              <Text style={[styles.modalLabel, { color: colors.text }]}>Daily Target (Goal per day)</Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <TextInput
+                    style={[
+                      styles.modalInput,
+                      {
+                        backgroundColor: colors.tabIconDefault + '22',
+                        color: colors.text,
+                        borderColor: colors.tint,
+                      },
+                    ]}
+                    placeholder="Hours"
+                    placeholderTextColor={colors.tabIconDefault}
+                    value={dailyHours}
+                    onChangeText={setDailyHours}
+                    keyboardType="decimal-pad"
+                  />
+                  <Text style={{ fontSize: 10, color: colors.text, marginTop: -15, marginBottom: 10 }}>Hours</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TextInput
+                    style={[
+                      styles.modalInput,
+                      {
+                        backgroundColor: colors.tabIconDefault + '22',
+                        color: colors.text,
+                        borderColor: colors.tint,
+                      },
+                    ]}
+                    placeholder="Minutes"
+                    placeholderTextColor={colors.tabIconDefault}
+                    value={dailyMinutes}
+                    onChangeText={setDailyMinutes}
+                    keyboardType="decimal-pad"
+                  />
+                  <Text style={{ fontSize: 10, color: colors.text, marginTop: -15, marginBottom: 10 }}>Minutes</Text>
+                </View>
+              </View>
+
+              <Text style={[styles.modalLabel, { color: colors.text }]}>Start Date</Text>
+              <TouchableOpacity
+                onPress={() => setShowStartDatePicker(true)}
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: colors.tabIconDefault + '22',
+                    borderColor: colors.tint,
+                    justifyContent: 'center',
+                  },
+                ]}>
+                <Text style={{ color: colors.text }}>
+                  {startDate}
+                </Text>
+              </TouchableOpacity>
+              {showStartDatePicker && Platform.OS === 'ios' && (
+                <View style={{ backgroundColor: colors.tabIconDefault + '11', borderRadius: 12, padding: 8, marginBottom: 15 }}>
+                  <DateTimePicker
+                    value={dayjs(startDate).toDate()}
+                    mode="date"
+                    display="spinner"
+                    style={{ height: 120 }}
+                    onChange={onStartDateChange}
+                  />
+                  <TouchableOpacity 
+                    style={{ alignSelf: 'flex-end', padding: 8 }}
+                    onPress={() => setShowStartDatePicker(false)}
+                  >
+                    <Text style={{ color: colors.tint, fontWeight: 'bold' }}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {showStartDatePicker && Platform.OS !== 'ios' && (
+                <DateTimePicker
+                  value={dayjs(startDate).toDate()}
+                  mode="date"
+                  display="default"
+                  onChange={onStartDateChange}
+                />
+              )}
+
+              <Text style={[styles.modalLabel, { color: colors.text }]}>Priority Type (Completion Logic)</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+                {(['hours', 'chapters', 'days', 'none'] as const).map((p) => (
+                  <TouchableOpacity
+                    key={p}
+                    onPress={() => setPriorityType(p)}
+                    style={{
+                      flex: 1,
+                      minWidth: '45%',
+                      padding: 10,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.tint,
+                      backgroundColor: priorityType === p ? colors.tint : 'transparent',
+                      alignItems: 'center',
+                    }}>
+                    <Text style={{ color: priorityType === p ? 'white' : colors.text, fontSize: 12, textTransform: 'capitalize', fontWeight: 'bold' }}>{p}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.modalLabel, { color: colors.text }]}>Total Goal ({priorityType})</Text>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: colors.tabIconDefault + '22',
+                    color: colors.text,
+                    borderColor: colors.tint,
+                  },
+                ]}
+                placeholder={`e.g., 50 ${priorityType}`}
+                placeholderTextColor={colors.tabIconDefault}
+                value={totalGoal}
+                onChangeText={handleTotalGoalChange}
+                keyboardType="decimal-pad"
+              />
+
+              <Text style={[styles.modalLabel, { color: colors.text }]}>Deadline (Optional)</Text>
+              <TouchableOpacity
+                onPress={() => setShowDeadlinePicker(true)}
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: colors.tabIconDefault + '22',
+                    borderColor: colors.tint,
+                    justifyContent: 'center',
+                  },
+                ]}>
+                <Text style={{ color: deadline ? colors.text : colors.tabIconDefault }}>
+                  {deadline || 'Select Deadline'}
+                </Text>
+              </TouchableOpacity>
+              {showDeadlinePicker && Platform.OS === 'ios' && (
+                <View style={{ backgroundColor: colors.tabIconDefault + '11', borderRadius: 12, padding: 8, marginBottom: 15 }}>
+                   <DateTimePicker
+                    value={deadline ? dayjs(deadline).toDate() : new Date()}
+                    mode="date"
+                    display="spinner"
+                    style={{ height: 120 }}
+                    minimumDate={startDate ? dayjs(startDate).toDate() : new Date()}
+                    onChange={onDeadlineChange}
+                  />
+                  <TouchableOpacity 
+                    style={{ alignSelf: 'flex-end', padding: 8 }}
+                    onPress={() => setShowDeadlinePicker(false)}
+                  >
+                    <Text style={{ color: colors.tint, fontWeight: 'bold' }}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {showDeadlinePicker && Platform.OS !== 'ios' && (
+                <DateTimePicker
+                  value={deadline ? dayjs(deadline).toDate() : new Date()}
+                  mode="date"
+                  display="default"
+                  minimumDate={startDate ? dayjs(startDate).toDate() : new Date()}
+                  onChange={onDeadlineChange}
+                />
+              )}
+
+              <TouchableOpacity
+                onPress={handleAddTask}
+                style={[styles.modalButton, { backgroundColor: colors.tint, marginTop: 10, marginBottom: 40 }]}>
+                <Text style={styles.modalButtonText}>Create Pro Task</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </SafeAreaView>
       </Modal>
@@ -420,6 +544,18 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 20,
     gap: 16,
+  },
+  infoBanner: {
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   summaryTitle: {
     fontSize: 18,

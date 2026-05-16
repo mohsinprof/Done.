@@ -4,7 +4,8 @@
  */
 
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useState } from 'react';
-import { AppState, Task, Folder, Session, Chapter, Workspace } from '../../app-src/types';
+import dayjs from 'dayjs';
+import { Task, Folder, Session, Chapter, Workspace, AppState } from '../../app-src/types';
 import {
   loadAppState,
   saveAppState,
@@ -45,7 +46,7 @@ type Action =
   | { type: 'EXECUTE_CARRY_OVER'; payload: AppState }
   | { type: 'START_TIMER'; payload: string } // taskId
   | { type: 'STOP_TIMER'; payload: { notes?: string } }
-  | { type: 'ADD_TASK'; payload: { name: string; dailyTargetHours: number; parentFolderId: string | null; totalChapters?: number; targetTotalHours?: number; daysToComplete?: number | null; completionPriority: 'hours' | 'chapters' | 'days' } }
+  | { type: 'ADD_TASK'; payload: { name: string; dailyTargetHours: number; parentFolderId: string | null; totalChapters?: number; targetTotalHours?: number; daysToComplete?: number | null; completionPriority: 'hours' | 'chapters' | 'days' | 'none'; scheduledDate?: string; deadlineDate?: string } }
   | { type: 'ADD_FOLDER'; payload: { name: string; parentFolderId: string | null } }
   | { type: 'DELETE_ITEM'; payload: string } // id
   | { type: 'DELETE_COMPLETED_TASKS' }
@@ -71,7 +72,7 @@ interface TaskContextType {
   getElapsedSeconds: () => number;
   
   // Task management actions
-  addTask: (name: string, dailyTargetHours: number, parentFolderId?: string | null, totalChapters?: number, targetTotalHours?: number, daysToComplete?: number | null, completionPriority?: 'hours' | 'chapters' | 'days') => void;
+  addTask: (name: string, dailyTargetHours: number, parentFolderId?: string | null, totalChapters?: number, targetTotalHours?: number, daysToComplete?: number | null, completionPriority?: 'hours' | 'chapters' | 'days' | 'none', scheduledDate?: string) => void;
   addFolder: (name: string, parentFolderId?: string | null) => void;
   updateTask: (taskId: string, updates: Partial<Task>) => void;
   deleteItem: (id: string) => void;
@@ -90,6 +91,9 @@ interface TaskContextType {
   
   // Helper getters
   getTodayTotalHours: () => number;
+  getTodayTotalSeconds: () => number;
+  getTaskTodaySeconds: (task: Task) => number;
+  getTaskTotalSeconds: (task: Task) => number;
   getTaskById: (taskId: string) => Task | null;
 }
 
@@ -115,11 +119,19 @@ function taskReducer(state: AppState, action: Action): AppState {
         currentState = taskReducer(state, { type: 'STOP_TIMER', payload: {} });
       }
 
-      return {
+      const task = getTaskById(currentState.workspace, taskId);
+      console.log(`[TaskContext] START_TIMER: task=${task?.name}, accumulated=${task?.currentSessionElapsedSeconds || 0}s`);
+
+      const nextState = {
         ...currentState,
         activeTimerTaskId: taskId,
-        activeTimerStartTime: now,
+        activeTimerStartTime: now, // Correct: ALWAYS start fresh from "now"
       };
+
+      // Crash Protection: Persist immediately
+      saveAppState(nextState).catch(e => console.error('Failed to persist START_TIMER', e));
+
+      return nextState;
     }
 
     case 'STOP_TIMER': {
@@ -128,7 +140,7 @@ function taskReducer(state: AppState, action: Action): AppState {
         return state;
       }
 
-      const elapsedSeconds = Math.floor((Date.now() - state.activeTimerStartTime) / 1000);
+      const liveElapsedSeconds = Math.floor((Date.now() - state.activeTimerStartTime) / 1000);
       const today = getTodayDate();
 
       // Find task and add session
@@ -149,34 +161,56 @@ function taskReducer(state: AppState, action: Action): AppState {
           currentSessionElapsedSeconds: 0,
         };
 
+        const dailyTargetTotalSec = Math.round((updatedTask.dailyTargetHours + updatedTask.remainingHours) * 3600);
+        const completedTodaySec = Math.round(updatedTask.completedTodayHours * 3600);
+
         // Check for lifetime completion based on priority
-        if (updatedTask.completionPriority === 'chapters') {
-          if (updatedTask.totalChapters && (updatedTask.completedChaptersCount || 0) >= updatedTask.totalChapters) {
+        if (updatedTask.completionPriority === 'hours') {
+          const targetSeconds = Math.round((updatedTask.targetTotalHours || 0) * 3600);
+          const completedTotalSeconds = Math.round(updatedTask.totalCompletedHours * 3600);
+          
+          if (targetSeconds > 0 && completedTotalSeconds >= targetSeconds) {
             updatedTask.isLifetimeCompleted = true;
+            console.log(`[TaskContext] Lifetime Goal (Hours) Reached: ${completedTotalSeconds}s / ${targetSeconds}s`);
           }
-        } else {
-          // Default to hours or days priority
-          if (updatedTask.targetTotalHours && updatedTask.totalCompletedHours >= (updatedTask.targetTotalHours - 0.001)) {
+        } else if (updatedTask.completionPriority === 'chapters') {
+          if (updatedTask.totalChapters && updatedTask.totalChapters > 0 && (updatedTask.completedChaptersCount || 0) >= updatedTask.totalChapters) {
             updatedTask.isLifetimeCompleted = true;
+            console.log(`[TaskContext] Lifetime Goal (Chapters) Reached`);
+          }
+        } else if (updatedTask.completionPriority === 'days') {
+          // Note: daysWorkedCount is incremented in carryOver, but for UI/Logic 
+          // we are checking if the goal will be met after carry-over.
+          const targetDays = updatedTask.totalDaysGoal || 0;
+          const finishedDays = updatedTask.daysWorkedCount || 0;
+          const isTodayFinished = completedTodaySec >= dailyTargetTotalSec;
+
+          if (targetDays > 0 && (finishedDays + (isTodayFinished ? 1 : 0)) >= targetDays) {
+            updatedTask.isLifetimeCompleted = true;
+            console.log(`[TaskContext] Lifetime Goal (Days) Reached (Today completes the goal)`);
+          }
+        } else if (updatedTask.completionPriority === 'none') {
+          // Priority 'none' (One-time): Automatically becomes lifetime completed when the single daily goal is met.
+          if (completedTodaySec >= dailyTargetTotalSec) {
+            updatedTask.isLifetimeCompleted = true;
+            console.log(`[TaskContext] Lifetime Goal (None/One-time) Reached`);
           }
         }
         
-        // Final fallback: if daily target is met and total goal matches daily target, it's finally done
-        if (!updatedTask.isLifetimeCompleted && 
-            updatedTask.completedTodayHours >= (updatedTask.dailyTargetHours - 0.001) && 
-            updatedTask.targetTotalHours === updatedTask.dailyTargetHours) {
-          updatedTask.isLifetimeCompleted = true;
-        }
-
         updatedWorkspace = updateTaskInWorkspace(updatedWorkspace, state.activeTimerTaskId, updatedTask);
       }
 
-      return {
+      const nextState = {
         ...state,
         workspace: updatedWorkspace,
         activeTimerTaskId: null,
         activeTimerStartTime: null,
       };
+
+      // Crash Protection: Persist immediately
+      saveAppState(nextState).catch(e => console.error('Failed to persist STOP_TIMER', e));
+
+      return nextState;
     }
 
     case 'PAUSE_TIMER': {
@@ -189,29 +223,54 @@ function taskReducer(state: AppState, action: Action): AppState {
       const task = getTaskById(updatedWorkspace, state.activeTimerTaskId);
       
       if (task) {
+        // totalElapsed is now the total seconds accumulated for this session so far
         const totalElapsed = (task.currentSessionElapsedSeconds || 0) + elapsedSeconds;
-        updatedWorkspace = updateTaskInWorkspace(updatedWorkspace, state.activeTimerTaskId, {
+        
+        let updatedTask = {
+          ...task,
           currentSessionElapsedSeconds: totalElapsed,
-        });
+        };
+
+        // Recalculate today's and total progress for real-time UI updates
+        // Note: we don't save a session yet because it's just paused.
+        // But the UI needs to know the task is "closer" to completion.
+        
+        updatedWorkspace = updateTaskInWorkspace(updatedWorkspace, state.activeTimerTaskId, updatedTask);
       }
 
-      return {
+      const nextState = {
         ...state,
         activeTimerTaskId: null,
         activeTimerStartTime: null,
         workspace: updatedWorkspace,
       };
+
+      // Crash Protection: Persist immediately
+      saveAppState(nextState).catch(e => console.error('Failed to persist PAUSE_TIMER', e));
+
+      return nextState;
     }
 
     case 'ADD_TASK': {
+      let { daysToComplete, scheduledDate, deadlineDate, completionPriority } = action.payload;
+
+      // Handle 'Days' priority auto-range logic
+      if (completionPriority === 'days' && daysToComplete && daysToComplete > 0) {
+        const start = scheduledDate || getTodayDate();
+        scheduledDate = start;
+        deadlineDate = dayjs(start).add(daysToComplete - 1, 'day').format('YYYY-MM-DD');
+      }
+
       const newTask = createTask(
         action.payload.name, 
         action.payload.dailyTargetHours, 
         action.payload.parentFolderId,
         action.payload.totalChapters || 0,
         action.payload.targetTotalHours || 0,
-        action.payload.daysToComplete || null,
-        action.payload.completionPriority || 'hours'
+        daysToComplete || null,
+        completionPriority || 'hours',
+        scheduledDate,
+        deadlineDate
       );
       return {
         ...state,
@@ -242,7 +301,7 @@ function taskReducer(state: AppState, action: Action): AppState {
       const task = getTaskById(state.workspace, action.payload);
       if (!task) return state;
 
-      return {
+      const nextState = {
         ...state,
         workspace: updateTaskInWorkspace(state.workspace, action.payload, {
           isLifetimeCompleted: false,
@@ -250,9 +309,15 @@ function taskReducer(state: AppState, action: Action): AppState {
           completedTodayHours: 0,
           remainingHours: 0,
           completedChaptersCount: 0,
+          daysWorkedCount: 0,
           sessions: []
         }),
       };
+
+      // Crash Protection
+      saveAppState(nextState).catch(e => console.error('Failed to persist RESTART_TASK', e));
+
+      return nextState;
     }
 
     case 'UPDATE_CHAPTER_COUNT': {
@@ -263,7 +328,6 @@ function taskReducer(state: AppState, action: Action): AppState {
       const current = task.completedChaptersCount || 0;
       const total = task.totalChapters || 0;
       
-      // For single-use (total === 0), we want to allow at least one increment to trigger completion
       const next = increment 
         ? (total > 0 ? Math.min(total, current + 1) : current + 1) 
         : Math.max(0, current - 1);
@@ -273,16 +337,15 @@ function taskReducer(state: AppState, action: Action): AppState {
       console.log(`[TaskContext] UPDATE_CHAPTER_COUNT: ${task.name}`);
       console.log(`[TaskContext] Current: ${current}, Next: ${next}, Total: ${total}`);
 
-      // Handle Single Use or Goal Completion
-      // A person set daily limit to 2 hours but chapter 9. If he completed 9 chapters in one hour it should consider completed.
-      if (increment && total > 0 && next === total) {
-        console.log(`[TaskContext] Marking Regular task as COMPLETED via Chapters`);
+      // Handle Lifetime Completion via Chapters
+      if (increment && task.completionPriority === 'chapters' && total > 0 && next === total) {
+        console.log(`[TaskContext] Lifetime Goal (Chapters) Reached via Manual Increment`);
         updates.isLifetimeCompleted = true;
       }
 
-      // Handle Single-use case (One min task, no chapters)
-      if (increment && total === 0 && next > 0) {
-        console.log(`[TaskContext] Marking Single Use task as COMPLETED via Manual Increment`);
+      // Handle Priority 'none' (One-time) completion via manual increment if they use chapters for it
+      if (increment && task.completionPriority === 'none' && next > 0) {
+        console.log(`[TaskContext] Lifetime Goal (None/One-time) Reached via Manual Increment`);
         updates.isLifetimeCompleted = true;
       }
 
@@ -300,10 +363,15 @@ function taskReducer(state: AppState, action: Action): AppState {
         };
       }
 
-      return {
+      const nextState = {
         ...state,
         workspace: updateTaskInWorkspace(state.workspace, taskId, updates),
       };
+
+      // Crash Protection
+      saveAppState(nextState).catch(e => console.error('Failed to persist UPDATE_CHAPTER_COUNT', e));
+
+      return nextState;
     }
 
     case 'SET_AUTO_DELETE': {
@@ -331,10 +399,15 @@ function taskReducer(state: AppState, action: Action): AppState {
     }
 
     case 'UPDATE_TASK': {
-      return {
+      const nextState = {
         ...state,
         workspace: updateTaskInWorkspace(state.workspace, action.payload.taskId, action.payload.updates),
       };
+      
+      // Crash Protection
+      saveAppState(nextState).catch(e => console.error('Failed to persist UPDATE_TASK', e));
+      
+      return nextState;
     }
 
     case 'ADD_CHAPTER': {
@@ -540,9 +613,14 @@ export function TaskProvider({ children }: { children: React.ReactNode }) {
 
       const now = Date.now();
       const elapsedSeconds = Math.floor((now - state.activeTimerStartTime!) / 1000) + (task.currentSessionElapsedSeconds || 0);
-      const targetSeconds = (task.dailyTargetHours + task.remainingHours) * 3600;
+      
+      const dailyTargetSeconds = Math.round(task.dailyTargetHours * 3600);
+      const remainingHoursSeconds = Math.round(task.remainingHours * 3600);
+      const targetSeconds = dailyTargetSeconds + remainingHoursSeconds;
+      
+      const completedTodaySeconds = Math.round(task.completedTodayHours * 3600);
 
-      if (elapsedSeconds >= targetSeconds) {
+      if (completedTodaySeconds + elapsedSeconds >= targetSeconds) {
         dispatch({ type: 'STOP_TIMER', payload: { notes: 'Auto-stopped: Daily target reached' } });
         clearInterval(interval);
       }
@@ -619,10 +697,28 @@ export function TaskProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addTask = useCallback(
-    (name: string, dailyTargetHours: number, parentFolderId: string | null = null, totalChapters: number = 0, targetTotalHours: number = 0, daysToComplete: number | null = null, completionPriority: 'hours' | 'chapters' | 'days' = 'hours') => {
+    (
+      name: string,
+      dailyTargetHours: number,
+      parentFolderId: string | null = null,
+      totalChapters: number = 0,
+      targetTotalHours: number = 0,
+      daysToComplete: number | null = null,
+      completionPriority: 'hours' | 'chapters' | 'days' | 'none' = 'hours',
+      scheduledDate?: string
+    ) => {
       dispatch({
         type: 'ADD_TASK',
-        payload: { name, dailyTargetHours, parentFolderId, totalChapters, targetTotalHours, daysToComplete, completionPriority },
+        payload: {
+          name,
+          dailyTargetHours,
+          parentFolderId,
+          totalChapters,
+          targetTotalHours,
+          daysToComplete,
+          completionPriority,
+          scheduledDate,
+        },
       });
     },
     []
@@ -708,6 +804,38 @@ export function TaskProvider({ children }: { children: React.ReactNode }) {
     return accumulated + current;
   }, [state]);
 
+  const getTodayTotalHoursValue = useCallback(() => {
+    const dailyTotal = calculateTodayTotalHours(state, getTodayDate());
+    // Add current session's work (paused and active)
+    const allTasks = getAllTasksFlat(state.workspace);
+    const accumulated = allTasks.reduce((sum, t) => sum + (t.currentSessionElapsedSeconds || 0), 0);
+    const live = state.activeTimerStartTime ? Math.floor((Date.now() - state.activeTimerStartTime) / 1000) : 0;
+    return dailyTotal + ((accumulated + live) / 3600);
+  }, [state]);
+
+  const getTodayTotalSeconds = useCallback(() => {
+    const dailyTotalHours = calculateTodayTotalHours(state, getTodayDate());
+    const dailyTotalSeconds = Math.round(dailyTotalHours * 3600);
+    const allTasks = getAllTasksFlat(state.workspace);
+    const accumulated = allTasks.reduce((sum, t) => sum + (t.currentSessionElapsedSeconds || 0), 0);
+    const live = state.activeTimerStartTime ? Math.floor((Date.now() - state.activeTimerStartTime) / 1000) : 0;
+    return dailyTotalSeconds + accumulated + live;
+  }, [state]);
+
+  const getTaskTodaySeconds = useCallback((task: Task) => {
+    const isThisActive = state.activeTimerTaskId === task.id;
+    const live = isThisActive && state.activeTimerStartTime ? Math.floor((Date.now() - state.activeTimerStartTime) / 1000) : 0;
+    const accumulated = task.currentSessionElapsedSeconds || 0;
+    return Math.round(task.completedTodayHours * 3600) + accumulated + live;
+  }, [state.activeTimerTaskId, state.activeTimerStartTime]);
+
+  const getTaskTotalSeconds = useCallback((task: Task) => {
+    const isThisActive = state.activeTimerTaskId === task.id;
+    const live = isThisActive && state.activeTimerStartTime ? Math.floor((Date.now() - state.activeTimerStartTime) / 1000) : 0;
+    const accumulated = task.currentSessionElapsedSeconds || 0;
+    return Math.round(task.totalCompletedHours * 3600) + accumulated + live;
+  }, [state.activeTimerTaskId, state.activeTimerStartTime]);
+
   const value: TaskContextType = {
     state,
     startTimer,
@@ -728,7 +856,10 @@ export function TaskProvider({ children }: { children: React.ReactNode }) {
     exportAppData,
     importAppData,
     setTheme,
-    getTodayTotalHours: () => calculateTodayTotalHours(state, getTodayDate()),
+    getTodayTotalHours: getTodayTotalHoursValue,
+    getTodayTotalSeconds,
+    getTaskTodaySeconds,
+    getTaskTotalSeconds,
     getTaskById: (taskId: string) => getTaskById(state.workspace, taskId),
   };
 

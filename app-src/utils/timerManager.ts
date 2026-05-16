@@ -58,13 +58,17 @@ export function stopTimer(
   accumulatedSeconds: number = 0
 ): Session {
   const now = Date.now();
-  const durationMinutes = Math.floor(((now - sessionStartTime) + (accumulatedSeconds * 1000)) / 1000 / 60);
+  const elapsedMs = now - sessionStartTime;
+  // Use a more precise duration in seconds stored as fractional minutes to avoid data loss
+  const totalSeconds = Math.floor(elapsedMs / 1000) + accumulatedSeconds;
+  
+  const durationMinutes = totalSeconds / 60; // Keep seconds precision as a decimal
   const today = dayjs().format('YYYY-MM-DD');
 
   return {
     id: generateSessionId(),
     taskId,
-    startTime: sessionStartTime - (accumulatedSeconds * 1000), // Adjust start time to include accumulated
+    startTime: sessionStartTime - (accumulatedSeconds * 1000), 
     endTime: now,
     duration: durationMinutes,
     date: today,
@@ -125,15 +129,16 @@ export function addSessionToTask(task: Task, session: Session): Task {
     task.sessions = [];
   }
   
+  // High-precision arithmetic using seconds as the base unit
+  const currentTotalSeconds = Math.round(task.totalCompletedHours * 3600);
+  const currentTodaySeconds = Math.round(task.completedTodayHours * 3600);
+  const sessionSeconds = Math.round(session.duration * 60);
+
   return {
     ...task,
     sessions: [...task.sessions, session],
-    totalCompletedHours: Number(
-      (task.totalCompletedHours + session.duration / 60).toFixed(2)
-    ),
-    completedTodayHours: Number(
-      (task.completedTodayHours + session.duration / 60).toFixed(2)
-    ),
+    totalCompletedHours: (currentTotalSeconds + sessionSeconds) / 3600,
+    completedTodayHours: (currentTodaySeconds + sessionSeconds) / 3600,
   };
 }
 

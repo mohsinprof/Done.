@@ -18,14 +18,66 @@ interface TaskCardProps {
 export function TaskCard({ task }: TaskCardProps) {
   const systemColorScheme = useColorScheme();
   const router = useRouter();
-  const { state, startTimer, deleteItem, restartTask } = useTask();
+  const { 
+    state, 
+    startTimer, 
+    stopTimer, 
+    deleteItem, 
+    restartTask, 
+    getTaskTodaySeconds, 
+    getTaskTotalSeconds 
+  } = useTask();
   
+  // Local state for live timer updates
+  const [liveTrigger, setLiveTrigger] = React.useState(0);
+  const isActive = state.activeTimerTaskId === task.id;
+
+  React.useEffect(() => {
+    let interval: any;
+    if (isActive) {
+      interval = setInterval(() => {
+        setLiveTrigger(prev => prev + 1);
+      }, 1000);
+    } else {
+      setLiveTrigger(0);
+    }
+    return () => clearInterval(interval);
+  }, [isActive]);
+
   const colors = Colors[state.themeMode === 'system' ? (systemColorScheme ?? 'light') : state.themeMode];
 
   const isBehind = isTaskBehindSchedule(task);
-  const remaining = task.remainingHours + (task.dailyTargetHours - task.completedTodayHours);
-  const isCompleted = task.completedTodayHours >= task.dailyTargetHours;
+  
+  // Use centralized math from context
+  const currentCompletedTodaySeconds = getTaskTodaySeconds(task);
+  const currentCompletedTodayHours = currentCompletedTodaySeconds / 3600;
+  
+  const dailyTargetSeconds = Math.round((task.dailyTargetHours + task.remainingHours) * 3600);
+  const remainingTodaySeconds = Math.max(0, dailyTargetSeconds - currentCompletedTodaySeconds);
+  
+  // Overall remaining
+  const totalTargetHours = task.targetTotalHours || task.dailyTargetHours;
+  const totalTargetSeconds = Math.round(totalTargetHours * 3600);
+  const totalCompletedSoFarSeconds = getTaskTotalSeconds(task);
+  const remainingOverallSeconds = Math.max(0, totalTargetSeconds - totalCompletedSoFarSeconds);
+  
+  const isCompleted = currentCompletedTodaySeconds >= dailyTargetSeconds;
   const isLifetimeDone = !!task.isLifetimeCompleted;
+
+  const remainingDays = task.completionPriority === 'days'
+    ? Math.max(0, (task.totalDaysGoal || 0) - (task.daysWorkedCount || 0) - (isCompleted ? 1 : 0))
+    : 0;
+
+  // Auto-stop if goal reached
+  React.useEffect(() => {
+    if (isActive && (isCompleted || isLifetimeDone)) {
+      // Small delay to allow state to settle and UI to show 100%
+      const timeout = setTimeout(() => {
+        stopTimer();
+      }, 500);
+      return () => clearTimeout(timeout);
+    }
+  }, [isActive, isCompleted, isLifetimeDone, stopTimer]);
 
   const handleStartTimer = () => {
     if (isCompleted || isLifetimeDone) {
@@ -48,9 +100,9 @@ export function TaskCard({ task }: TaskCardProps) {
       style={[
         styles.container,
         {
-          borderColor: isLifetimeDone ? '#4CAF50' : (isCompleted ? '#4CAF50' : isBehind ? '#ff6b6b' : colors.tabIconDefault),
+          borderColor: isLifetimeDone ? '#4CAF50' : (isCompleted ? '#a5d6a7' : isBehind ? '#ff6b6b' : colors.tabIconDefault),
           backgroundColor: isLifetimeDone ? 'rgba(76, 175, 80, 0.2)' : (isCompleted ? 'rgba(76, 175, 80, 0.1)' : colors.background),
-          borderWidth: (isCompleted || isLifetimeDone) ? 2 : 1,
+          borderWidth: isLifetimeDone ? 2 : (isCompleted ? 1.5 : 1),
         },
       ]}>
       <View style={styles.header}>
@@ -60,7 +112,7 @@ export function TaskCard({ task }: TaskCardProps) {
             <Text style={[styles.behindBadge, { backgroundColor: '#4CAF50' }]}>Goal Reached!</Text>
           )}
           {isCompleted && !isLifetimeDone && (
-            <Text style={[styles.behindBadge, { backgroundColor: '#4CAF50' }]}>Completed</Text>
+            <Text style={[styles.behindBadge, { backgroundColor: '#4CAF50', opacity: 0.8 }]}>Daily Goal Met</Text>
           )}
           {isBehind && !isCompleted && !isLifetimeDone && (
             <Text style={styles.behindBadge}>Behind</Text>
@@ -71,10 +123,14 @@ export function TaskCard({ task }: TaskCardProps) {
       <View style={styles.statsRow}>
         <View style={styles.stat}>
           <Text style={[styles.statLabel, { color: colors.tabIconDefault }]}>
-            Remaining
+            {task.completionPriority === 'days' ? 'Days Rem.' : (task.completionPriority === 'chapters' ? 'Chapters Rem.' : 'Remaining')}
           </Text>
           <Text style={[styles.statValue, { color: colors.text }]}>
-            {formatHours(remaining)}
+            {task.completionPriority === 'days' 
+              ? `${remainingDays}d`
+              : task.completionPriority === 'chapters'
+              ? `${Math.max(0, (task.totalChapters || 0) - (task.completedChaptersCount || 0))}`
+              : formatHours(remainingOverallSeconds / 3600)}
           </Text>
         </View>
         <View style={styles.stat}>
@@ -82,22 +138,25 @@ export function TaskCard({ task }: TaskCardProps) {
             Today
           </Text>
           <Text style={[styles.statValue, { color: colors.text }]}>
-            {formatHours(task.completedTodayHours)} / {formatHours(task.dailyTargetHours)}
+            {formatHours(currentCompletedTodayHours)} / {formatHours(task.dailyTargetHours)}
           </Text>
         </View>
         <View style={styles.stat}>
           <Text style={[styles.statLabel, { color: colors.tabIconDefault }]}>
-            Total
+            {task.completionPriority === 'days' ? 'Days Done' : (task.completionPriority === 'chapters' ? 'Chapters' : 'Total')}
           </Text>
           <Text style={[styles.statValue, { color: colors.text }]}>
-            {formatHours(task.totalCompletedHours)}
-            {task.targetTotalHours ? ` / ${formatHours(task.targetTotalHours)}` : ''}
+            {task.completionPriority === 'days'
+              ? `${task.daysWorkedCount || 0}${task.totalDaysGoal ? ` / ${task.totalDaysGoal}` : ''}`
+              : task.completionPriority === 'chapters'
+              ? `${task.completedChaptersCount || 0}${task.totalChapters ? ` / ${task.totalChapters}` : ''}`
+              : `${formatHours(totalCompletedSoFarSeconds / 3600)}${task.targetTotalHours ? ` / ${formatHours(task.targetTotalHours)}` : ''}`}
           </Text>
         </View>
       </View>
 
       <ProgressBar
-        completed={task.completedTodayHours}
+        completed={currentCompletedTodayHours}
         target={task.dailyTargetHours}
         showLabel={false}
       />
@@ -106,6 +165,14 @@ export function TaskCard({ task }: TaskCardProps) {
         <View style={{ marginTop: 8 }}>
           <Text style={[styles.statLabel, { color: colors.tabIconDefault }]}>
             Chapters: {task.completedChaptersCount || 0} / {task.totalChapters}
+          </Text>
+        </View>
+      )}
+
+      {(task.totalDaysGoal || 0) > 0 && (
+        <View style={{ marginTop: 4 }}>
+          <Text style={[styles.statLabel, { color: colors.tabIconDefault }]}>
+            Days: {task.daysWorkedCount || 0} / {task.totalDaysGoal}
           </Text>
         </View>
       )}
@@ -123,11 +190,14 @@ export function TaskCard({ task }: TaskCardProps) {
             <Text style={styles.startButtonText}>Delete Task</Text>
           </TouchableOpacity>
         </View>
-      ) : !isCompleted && (
+      ) : (
         <TouchableOpacity
           onPress={handleStartTimer}
-          style={[styles.startButton, { backgroundColor: colors.tint }]}>
-          <Text style={styles.startButtonText}>Start Timer</Text>
+          disabled={isCompleted}
+          style={[styles.startButton, { backgroundColor: isCompleted ? '#4CAF50' : colors.tint, marginTop: 12 }]}>
+          <Text style={styles.startButtonText}>
+            {isCompleted ? 'Daily Goal Met' : 'Start Timer'}
+          </Text>
         </TouchableOpacity>
       )}
     </TouchableOpacity>

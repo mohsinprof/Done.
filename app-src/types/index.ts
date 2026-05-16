@@ -29,6 +29,8 @@ export interface Task {
   parentFolderId: string | null; // null if top-level
   dailyTargetHours: number; // hours per day
   targetTotalHours?: number; // lifetime target hours (e.g., 100 hours of exercise)
+  totalDaysGoal?: number; // total days to work on this task
+  daysWorkedCount?: number; // count of days where daily target was met
   isLifetimeCompleted?: boolean; // if targetTotalHours reached
   remainingHours: number; // hours left for today (carried over from yesterday)
   totalCompletedHours: number; // lifetime total
@@ -39,7 +41,10 @@ export interface Task {
   completedChaptersCount?: number;
   sessions?: Session[]; // all historical sessions for this task
   currentSessionElapsedSeconds?: number; // accumulated time for current unfinished session
-  completionPriority: 'hours' | 'chapters' | 'days'; // Priority for lifetime completion
+  completionPriority: 'hours' | 'chapters' | 'days' | 'none'; // Priority for lifetime completion
+  scheduledDate?: string; // YYYY-MM-DD for one-off planned tasks
+  deadlineDate?: string; // YYYY-MM-DD for explicit end date
+  isPlanned?: boolean; // toggle for scheduled/planned tasks
   autoDeleteConfig?: {
     enabled: boolean;
     delayType: 'minutes' | 'hours' | 'days';

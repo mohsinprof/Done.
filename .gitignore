@@ -39,8 +39,8 @@ yarn-error.*
 app-example
 
 # generated native folders
-/ios
-/android
+
+
 
 # local documentation
 DEVELOPER_GUIDE.md

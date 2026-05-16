@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Session } from '../../app-src/types';
 import { Colors } from '../constants/theme';
 import { useColorScheme } from '../hooks/use-color-scheme';
-import { formatDateTime, formatTime, formatMinutes } from '../../app-src/utils/helpers';
+import { formatDateTime, formatTime, formatHours } from '../../app-src/utils/helpers';
 
 interface SessionListItemProps {
   session: Session;
@@ -16,7 +16,7 @@ export function SessionListItem({ session }: SessionListItemProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 
-  const durationStr = formatMinutes(session.duration);
+  const durationStr = formatHours(session.duration / 60);
   const startTimeStr = formatTime(session.startTime);
   const endTimeStr = session.endTime ? formatTime(session.endTime) : 'ongoing';
 
